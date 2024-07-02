@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lego Block Builder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #controls {
+            margin-bottom: 20px;
+        }
+
+        button {
+            font-size: 16px;
+            padding: 10px 20px;
+            margin: 0 10px;
+            cursor: pointer;
+        }
+
+        #color-picker {
+            vertical-align: middle;
+        }
+
+        #grid-container {
+            display: grid;
+            grid-template-columns: repeat(10, 30px);
+            grid-template-rows: repeat(10, 30px);
+            gap: 1px;
+            background-color: #ccc;
+            border: 1px solid #999;
+        }
+
+        .grid-cell {
+            width: 30px;
+            height: 30px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            box-sizing: border-box;
+        }
+
+        .block {
+            width: 100%;
+            height: 100%;
+            transition: background-color 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="controls">
+            <button id="add-block">Add Block</button>
+            <button id="remove-block">Remove Block</button>
+            <input type="color" id="color-picker" value="#ff0000">
+        </div>
+        <div id="grid-container"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const gridContainer = document.getElementById('grid-container');
+            const addBlockBtn = document.getElementById('add-block');
+            const removeBlockBtn = document.getElementById('remove-block');
+            const colorPicker = document.getElementById('color-picker');
+            
+            let isAddingBlock = false;
+            let isRemovingBlock = false;
+
+            // Create grid
+            for (let i = 0; i < 100; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-cell');
+                gridContainer.appendChild(cell);
+            }
+
+            // Add block functionality
+            addBlockBtn.addEventListener('click', () => {
+                isAddingBlock = true;
+                isRemovingBlock = false;
+            });
+
+            // Remove block functionality
+            removeBlockBtn.addEventListener('click', () => {
+                isRemovingBlock = true;
+                isAddingBlock = false;
+            });
+
+            // Grid cell click handler
+            gridContainer.addEventListener('click', (e) => {
+                if (e.target.classList.contains('grid-cell')) {
+                    if (isAddingBlock) {
+                        addBlock(e.target);
+                    } else if (isRemovingBlock) {
+                        removeBlock(e.target);
+                    }
+                }
+            });
+
+            // Add block function
+            function addBlock(cell) {
+                if (!cell.firstChild) {
+                    const block = document.createElement('div');
+                    block.classList.add('block');
+                    block.style.backgroundColor = colorPicker.value;
+                    cell.appendChild(block);
+                } else {
+                    cell.firstChild.style.backgroundColor = colorPicker.value;
+                }
+            }
+
+            // Remove block function
+            function removeBlock(cell) {
+                if (cell.firstChild) {
+                    cell.removeChild(cell.firstChild);
+                }
+            }
+
+            // Color change functionality
+            colorPicker.addEventListener('input', () => {
+                const selectedBlocks = document.querySelectorAll('.grid-cell:hover .block');
+                selectedBlocks.forEach(block => {
+                    block.style.backgroundColor = colorPicker.value;
+                });
+            });
+        });
+    </script>
+</body>
+</html>
