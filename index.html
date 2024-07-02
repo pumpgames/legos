@@ -3,140 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lego Block Builder</title>
+    <title>3D Lego Builder</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
             margin: 0;
-            background-color: #f0f0f0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
         }
-
-        #game-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        #scene-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
         }
-
-        #controls {
-            margin-bottom: 20px;
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
         }
-
         button {
-            font-size: 16px;
-            padding: 10px 20px;
-            margin: 0 10px;
+            margin: 5px;
+            padding: 10px;
+            font-size: 14px;
             cursor: pointer;
         }
-
         #color-picker {
             vertical-align: middle;
         }
-
-        #grid-container {
-            display: grid;
-            grid-template-columns: repeat(10, 30px);
-            grid-template-rows: repeat(10, 30px);
-            gap: 1px;
-            background-color: #ccc;
-            border: 1px solid #999;
-        }
-
-        .grid-cell {
-            width: 30px;
-            height: 30px;
-            background-color: #fff;
-            border: 1px solid #ddd;
-            box-sizing: border-box;
-        }
-
-        .block {
-            width: 100%;
-            height: 100%;
-            transition: background-color 0.3s ease;
+        #instructions {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
         }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
 </head>
 <body>
-    <div id="game-container">
-        <div id="controls">
-            <button id="add-block">Add Block</button>
-            <button id="remove-block">Remove Block</button>
-            <input type="color" id="color-picker" value="#ff0000">
-        </div>
-        <div id="grid-container"></div>
+    <div id="scene-container"></div>
+    <div id="ui-container">
+        <button id="add-block">Add Block</button>
+        <button id="remove-block">Remove Block</button>
+        <input type="color" id="color-picker" value="#ff0000">
+        <button id="rotate-block">Rotate Block</button>
+        <button id="clear-all">Clear All</button>
+    </div>
+    <div id="instructions">
+        Left Click: Place/Remove Block | Right Click: Rotate Camera | Scroll: Zoom | WASD: Move Camera
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const gridContainer = document.getElementById('grid-container');
-            const addBlockBtn = document.getElementById('add-block');
-            const removeBlockBtn = document.getElementById('remove-block');
-            const colorPicker = document.getElementById('color-picker');
-            
-            let isAddingBlock = false;
-            let isRemovingBlock = false;
+        let scene, camera, renderer, raycaster, mouse, grid, blocks = [];
+        let isAddingBlock = true, selectedColor = 0xff0000;
+        const blockSize = 1, blockHeight = 0.5;
 
-            // Create grid
-            for (let i = 0; i < 100; i++) {
-                const cell = document.createElement('div');
-                cell.classList.add('grid-cell');
-                gridContainer.appendChild(cell);
-            }
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('scene-container').appendChild(renderer.domElement);
 
-            // Add block functionality
-            addBlockBtn.addEventListener('click', () => {
-                isAddingBlock = true;
-                isRemovingBlock = false;
-            });
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(1, 1, 1);
+            scene.add(directionalLight);
 
-            // Remove block functionality
-            removeBlockBtn.addEventListener('click', () => {
-                isRemovingBlock = true;
-                isAddingBlock = false;
-            });
+            // Grid
+            const gridHelper = new THREE.GridHelper(20, 20);
+            scene.add(gridHelper);
 
-            // Grid cell click handler
-            gridContainer.addEventListener('click', (e) => {
-                if (e.target.classList.contains('grid-cell')) {
+            // Raycaster for block placement
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            // Camera position
+            camera.position.set(10, 10, 10);
+            camera.lookAt(0, 0, 0);
+
+            // Controls
+            setupControls();
+
+            // Event listeners
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('mousedown', onMouseDown, false);
+            document.addEventListener('mousemove', onMouseMove, false);
+        }
+
+        function setupControls() {
+            document.getElementById('add-block').addEventListener('click', () => isAddingBlock = true);
+            document.getElementById('remove-block').addEventListener('click', () => isAddingBlock = false);
+            document.getElementById('color-picker').addEventListener('input', (e) => selectedColor = parseInt(e.target.value.substring(1), 16));
+            document.getElementById('rotate-block').addEventListener('click', rotateSelectedBlock);
+            document.getElementById('clear-all').addEventListener('click', clearAllBlocks);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseMove(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+        }
+
+        function onMouseDown(event) {
+            if (event.button === 0) { // Left click
+                raycaster.setFromCamera(mouse, camera);
+                const intersects = raycaster.intersectObjects(scene.children);
+                if (intersects.length > 0) {
+                    const intersect = intersects[0];
                     if (isAddingBlock) {
-                        addBlock(e.target);
-                    } else if (isRemovingBlock) {
-                        removeBlock(e.target);
+                        addBlock(intersect.point);
+                    } else {
+                        removeBlock(intersect.object);
                     }
                 }
-            });
-
-            // Add block function
-            function addBlock(cell) {
-                if (!cell.firstChild) {
-                    const block = document.createElement('div');
-                    block.classList.add('block');
-                    block.style.backgroundColor = colorPicker.value;
-                    cell.appendChild(block);
-                } else {
-                    cell.firstChild.style.backgroundColor = colorPicker.value;
-                }
             }
+        }
 
-            // Remove block function
-            function removeBlock(cell) {
-                if (cell.firstChild) {
-                    cell.removeChild(cell.firstChild);
-                }
+        function addBlock(position) {
+            const roundedPosition = position.divideScalar(blockSize).floor().multiplyScalar(blockSize).addScalar(blockSize / 2);
+            roundedPosition.y = Math.floor(roundedPosition.y / blockHeight) * blockHeight + blockHeight / 2;
+
+            const geometry = new THREE.BoxGeometry(blockSize, blockHeight, blockSize);
+            const material = new THREE.MeshPhongMaterial({ color: selectedColor });
+            const block = new THREE.Mesh(geometry, material);
+            block.position.copy(roundedPosition);
+            scene.add(block);
+            blocks.push(block);
+        }
+
+        function removeBlock(object) {
+            if (blocks.includes(object)) {
+                scene.remove(object);
+                blocks = blocks.filter(b => b !== object);
             }
+        }
 
-            // Color change functionality
-            colorPicker.addEventListener('input', () => {
-                const selectedBlocks = document.querySelectorAll('.grid-cell:hover .block');
-                selectedBlocks.forEach(block => {
-                    block.style.backgroundColor = colorPicker.value;
-                });
-            });
-        });
+        function rotateSelectedBlock() {
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(blocks);
+            if (intersects.length > 0) {
+                const block = intersects[0].object;
+                block.rotation.y += Math.PI / 2;
+            }
+        }
+
+        function clearAllBlocks() {
+            blocks.forEach(block => scene.remove(block));
+            blocks = [];
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        init();
+        animate();
     </script>
 </body>
 </html>
